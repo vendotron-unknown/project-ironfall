@@ -1,0 +1,794 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-mono,monospace)}
+#game{width:100%;min-height:600px;background:#0a0e14;color:#c8d6e5;font-family:monospace;font-size:12px;position:relative;overflow:hidden;user-select:none}
+#stratmap{width:100%;height:320px;position:relative;background:#0a0e14;border-bottom:2px solid #1e3a2f}
+#battlemap{width:100%;height:380px;position:relative;background:#111a12;display:none}
+canvas{display:block}
+#hud{position:absolute;top:6px;left:6px;z-index:10;pointer-events:none}
+.hud-panel{background:rgba(10,20,14,0.92);border:1px solid #2a5a3a;padding:6px 10px;margin-bottom:4px;min-width:160px}
+.hud-title{color:#4ade80;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.hud-row{display:flex;justify-content:space-between;gap:16px;font-size:11px;color:#8ba89a}
+.hud-val{color:#c8d6e5;font-weight:500}
+#rhud{position:absolute;top:6px;right:6px;z-index:10;text-align:right}
+#msgbox{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);border:1px solid #3a6a4a;padding:6px 16px;color:#4ade80;font-size:11px;letter-spacing:1px;z-index:20;pointer-events:none;transition:opacity 0.5s}
+#toolbar{background:#060e0a;border-top:1px solid #1e3a2f;display:flex;gap:6px;padding:6px 10px;align-items:center;flex-wrap:wrap}
+.tbtn{background:#0e2018;border:1px solid #2a5a3a;color:#7db894;padding:4px 10px;font-family:monospace;font-size:11px;cursor:pointer;letter-spacing:1px}
+.tbtn:hover{background:#1a3a28;color:#4ade80}
+.tbtn.active{background:#1a4a2a;border-color:#4ade80;color:#4ade80}
+.tbtn.red{border-color:#7a2a2a;color:#e87070}
+.tbtn.red:hover{background:#3a1010;color:#ff8080}
+#stratinfo{position:absolute;bottom:44px;left:6px;right:6px;background:rgba(6,14,10,0.96);border:1px solid #2a5a3a;padding:8px 12px;font-size:11px;display:none;z-index:15}
+#missionpanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#060e0a;border:2px solid #4ade80;padding:24px 32px;z-index:50;min-width:280px;display:none}
+.mpanel-title{color:#4ade80;font-size:16px;letter-spacing:3px;margin-bottom:12px;text-transform:uppercase}
+.mpanel-row{color:#8ba89a;font-size:11px;margin:4px 0}
+.mpanel-row span{color:#c8d6e5}
+.mpbtn{display:block;width:100%;margin-top:8px;background:#0e3020;border:1px solid #4ade80;color:#4ade80;padding:8px;font-family:monospace;font-size:12px;cursor:pointer;letter-spacing:2px}
+.mpbtn:hover{background:#1a4a30}
+#strategyoverlay{position:absolute;top:6px;left:50%;transform:translateX(-50%);color:#4ade80;font-size:10px;letter-spacing:2px;z-index:10;pointer-events:none}
+#battletitle{position:absolute;top:6px;left:50%;transform:translateX(-50%);color:#4ade80;font-size:10px;letter-spacing:2px;z-index:10;pointer-events:none}
+#wavebar{position:absolute;top:0;left:0;right:0;height:3px;background:#1e3a2f;z-index:10}
+#wavefill{height:3px;background:#4ade80;width:0%;transition:width 0.5s}
+</style>
+
+<div id="game">
+  <div id="stratmap">
+    <div id="wavebar"><div id="wavefill"></div></div>
+    <canvas id="sCanvas"></canvas>
+    <div id="strategyoverlay">STRATEGIC MAP — CLICK TERRITORY TO PLAN OPERATION</div>
+    <div id="hud">
+      <div class="hud-panel">
+        <div class="hud-title">Command</div>
+        <div class="hud-row"><span>Resources</span><span class="hud-val" id="hud-res">800</span></div>
+        <div class="hud-row"><span>Territories</span><span class="hud-val" id="hud-terr">3 / 12</span></div>
+        <div class="hud-row"><span>Turn</span><span class="hud-val" id="hud-turn">1</span></div>
+      </div>
+      <div class="hud-panel">
+        <div class="hud-title">Fleet</div>
+        <div class="hud-row"><span>Squads</span><span class="hud-val" id="hud-squads">3</span></div>
+        <div class="hud-row"><span>Morale</span><span class="hud-val" id="hud-morale">HIGH</span></div>
+      </div>
+    </div>
+    <div id="rhud" class="hud-panel" style="position:absolute;top:6px;right:6px;min-width:140px">
+      <div class="hud-title">Enemy Intel</div>
+      <div class="hud-row"><span>Presence</span><span class="hud-val" id="hud-threat">MEDIUM</span></div>
+      <div class="hud-row"><span>Territories</span><span class="hud-val" id="hud-eterr">9</span></div>
+    </div>
+    <div id="stratinfo"></div>
+  </div>
+
+  <div id="battlemap">
+    <canvas id="bCanvas"></canvas>
+    <div id="battletitle">TACTICAL OPERATIONS — WASD/ARROWS MOVE | CLICK ATTACK | [1]STRIKECALL [2]AIRSTRIKE [3]RESUPPLY</div>
+    <div id="hud" style="display:none"></div>
+  </div>
+
+  <div id="toolbar">
+    <span style="color:#4ade80;font-size:10px;letter-spacing:2px;margin-right:4px">STRATCOM:</span>
+    <button class="tbtn active" id="btn-strat" onclick="showStrat()">STRATEGIC MAP</button>
+    <button class="tbtn" id="btn-battle" onclick="showBattle()" style="display:none">TACTICAL MAP</button>
+    <button class="tbtn" onclick="endTurn()">END TURN</button>
+    <button class="tbtn" onclick="recruitSquad()">+ SQUAD (150)</button>
+    <span style="color:#4ade80;font-size:10px;letter-spacing:2px;margin-left:8px">STRATAGEMS:</span>
+    <button class="tbtn" onclick="unlockStratagem('orbital')"  id="strat-orb">ORBITAL STRIKE (200)</button>
+    <button class="tbtn" onclick="unlockStratagem('turret')" id="strat-tur">AUTO TURRET (150)</button>
+    <button class="tbtn" onclick="unlockStratagem('shield')" id="strat-shld">SHIELD GEN (180)</button>
+  </div>
+
+  <div id="missionpanel">
+    <div class="mpanel-title" id="mp-title">OPERATION ALPHA</div>
+    <div class="mpanel-row">Territory: <span id="mp-terr">—</span></div>
+    <div class="mpanel-row">Enemy Forces: <span id="mp-enemy">—</span></div>
+    <div class="mpanel-row">Objective: <span id="mp-obj">—</span></div>
+    <div class="mpanel-row">Reward: <span id="mp-reward">—</span></div>
+    <button class="mpbtn" onclick="launchMission()">DEPLOY SQUAD</button>
+    <button class="mpbtn" style="background:#1a0a0a;border-color:#7a3a3a;color:#e87070" onclick="closeMission()">STAND DOWN</button>
+  </div>
+
+  <div id="msgbox" style="opacity:0"></div>
+</div>
+
+<script>
+const G={
+  resources:800, turn:1, squads:3, maxSquads:6,
+  stratagems:{orbital:false,turret:false,shield:false},
+  unlockedStratagems:[],
+  territories:[],
+  selectedTerritory:null,
+  inBattle:false,
+  wave:0, totalWaves:5,
+  missionReward:0
+};
+
+const TERRITORY_NAMES=["Alpha Prime","Bravo Station","Charlie Ridge","Delta Outpost","Echo Wastes",
+  "Foxtrot Basin","Golf Crater","Hotel Spire","India Shelf","Juliet Rift","Kilo Depths","Lima Core"];
+const OBJECTIVES=["Destroy Bug Nest","Eliminate Patrol","Hold Position","Recover Intel","Sabotage Relay","Destroy Factory"];
+
+let sCtx, bCtx, sCanvas, bCanvas;
+let battleState=null;
+let keys={};
+let animFrame;
+let msgTimer;
+let particles=[];
+
+function init(){
+  sCanvas=document.getElementById('sCanvas');
+  bCanvas=document.getElementById('bCanvas');
+  sCtx=sCanvas.getContext('2d');
+  bCtx=bCanvas.getContext('2d');
+  resize();
+  window.addEventListener('resize',resize);
+  generateTerritories();
+  drawStratMap();
+  sCanvas.addEventListener('click',onStratClick);
+  document.addEventListener('keydown',e=>{keys[e.key]=true; handleKey(e)});
+  document.addEventListener('keyup',e=>{keys[e.key]=false});
+  updateHUD();
+  showMsg("COMMAND ONLINE — SELECT TERRITORY TO PLAN OPERATION");
+}
+
+function resize(){
+  const w=document.getElementById('game').offsetWidth||700;
+  sCanvas.width=w; sCanvas.height=320;
+  bCanvas.width=w; bCanvas.height=380;
+  if(G.inBattle && battleState) drawBattle();
+  else drawStratMap();
+}
+
+function generateTerritories(){
+  const w=sCanvas.width||700, h=280;
+  const friendly=[[0.1,0.5],[0.15,0.25],[0.2,0.7]];
+  const enemy=[[0.45,0.3],[0.55,0.55],[0.65,0.25],[0.7,0.65],[0.8,0.4],
+                [0.5,0.75],[0.85,0.7],[0.6,0.85],[0.35,0.15]];
+  G.territories=[];
+  TERRITORY_NAMES.forEach((name,i)=>{
+    let pos,team;
+    if(i<3){pos=friendly[i];team='friendly';}
+    else{pos=enemy[i-3];team='enemy';}
+    G.territories.push({
+      id:i, name, x:pos[0]*w, y:pos[1]*h+30,
+      team, strength:team==='enemy'?Math.floor(Math.random()*4)+2:0,
+      garrison:team==='friendly'?1:0,
+      objective:OBJECTIVES[Math.floor(Math.random()*OBJECTIVES.length)],
+      reward:Math.floor(Math.random()*200)+100,
+      connected:[]
+    });
+  });
+  for(let i=0;i<G.territories.length;i++){
+    for(let j=i+1;j<G.territories.length;j++){
+      const a=G.territories[i],b=G.territories[j];
+      const d=Math.hypot(a.x-b.x,a.y-b.y);
+      if(d<(w*0.22)){
+        a.connected.push(j);
+        b.connected.push(i);
+      }
+    }
+  }
+}
+
+function drawStratMap(){
+  if(!sCtx)return;
+  const W=sCanvas.width,H=sCanvas.height;
+  sCtx.clearRect(0,0,W,H);
+  sCtx.fillStyle='#070e0b';
+  sCtx.fillRect(0,0,W,H);
+  drawGrid(sCtx,W,H,'#0d1a12');
+  G.territories.forEach(t=>{
+    t.connected.forEach(j=>{
+      const nb=G.territories[j];
+      sCtx.beginPath();
+      sCtx.moveTo(t.x,t.y);
+      sCtx.lineTo(nb.x,nb.y);
+      sCtx.strokeStyle='#1a3020';
+      sCtx.lineWidth=1;
+      sCtx.stroke();
+    });
+  });
+  G.territories.forEach(t=>{
+    const sel=G.selectedTerritory&&G.selectedTerritory.id===t.id;
+    const col=t.team==='friendly'?'#4ade80':t.team==='neutral'?'#b8a840':'#e84040';
+    const r=sel?14:10;
+    sCtx.beginPath();
+    sCtx.arc(t.x,t.y,r+3,0,Math.PI*2);
+    sCtx.fillStyle=sel?'rgba(74,222,128,0.2)':'rgba(0,0,0,0)';
+    sCtx.fill();
+    sCtx.beginPath();
+    sCtx.arc(t.x,t.y,r,0,Math.PI*2);
+    sCtx.fillStyle=col+'33';
+    sCtx.fill();
+    sCtx.beginPath();
+    sCtx.arc(t.x,t.y,r,0,Math.PI*2);
+    sCtx.strokeStyle=col;
+    sCtx.lineWidth=sel?2:1;
+    sCtx.stroke();
+    sCtx.fillStyle=col;
+    sCtx.font='9px monospace';
+    sCtx.textAlign='center';
+    sCtx.fillText(t.name.substring(0,8),t.x,t.y+r+12);
+    if(t.team==='enemy'){
+      sCtx.fillStyle='#e84040';
+      sCtx.font='bold 9px monospace';
+      sCtx.fillText('E:'+t.strength,t.x,t.y+4);
+    } else {
+      sCtx.fillStyle='#4ade80';
+      sCtx.font='bold 9px monospace';
+      sCtx.fillText('★',t.x,t.y+4);
+    }
+    sCtx.textAlign='left';
+  });
+}
+
+function drawGrid(ctx,W,H,col){
+  ctx.strokeStyle=col;
+  ctx.lineWidth=0.5;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function onStratClick(e){
+  const rect=sCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  let hit=null;
+  G.territories.forEach(t=>{
+    if(Math.hypot(t.x-mx,t.y-my)<18)hit=t;
+  });
+  if(hit){
+    G.selectedTerritory=hit;
+    drawStratMap();
+    showTerritoryInfo(hit);
+  }
+}
+
+function showTerritoryInfo(t){
+  const d=document.getElementById('stratinfo');
+  d.style.display='block';
+  const adj=t.connected.some(i=>G.territories[i].team==='friendly');
+  const canAttack=t.team==='enemy'&&(adj||t.connected.length===0);
+  d.innerHTML=`<span style="color:#4ade80;letter-spacing:2px">${t.name.toUpperCase()}</span> &nbsp;|&nbsp; 
+    Status: <span style="color:${t.team==='friendly'?'#4ade80':'#e84040'}">${t.team.toUpperCase()}</span> &nbsp;|&nbsp;
+    Objective: <span style="color:#c8d6e5">${t.objective}</span> &nbsp;|&nbsp;
+    Reward: <span style="color:#f0c040">+${t.reward} res</span>
+    ${t.team==='enemy'?`&nbsp;|&nbsp; Threat: <span style="color:#e84040">LVL ${t.strength}</span>`:''}
+    ${t.team==='enemy'&&canAttack?`&nbsp;&nbsp;<button class="tbtn" onclick="openMission(${t.id})" style="pointer-events:all">PLAN ATTACK ▶</button>`:''}
+    ${t.team==='enemy'&&!canAttack?'&nbsp;&nbsp;<span style="color:#6a4a4a">NOT ADJACENT</span>':''}
+    ${t.team==='friendly'?'&nbsp;&nbsp;<span style="color:#4ade80">CONTROLLED</span>':''}
+  `;
+}
+
+function openMission(tid){
+  const t=G.territories[tid];
+  if(!t||t.team!=='enemy')return;
+  document.getElementById('mp-title').textContent='OPERATION: '+t.name.toUpperCase();
+  document.getElementById('mp-terr').textContent=t.name;
+  document.getElementById('mp-enemy').textContent='Level '+t.strength+' ('+t.strength*3+' hostiles)';
+  document.getElementById('mp-obj').textContent=t.objective;
+  document.getElementById('mp-reward').textContent='+'+t.reward+' Resources';
+  G.selectedTerritory=t;
+  G.missionReward=t.reward;
+  document.getElementById('missionpanel').style.display='block';
+}
+
+function closeMission(){
+  document.getElementById('missionpanel').style.display='none';
+}
+
+function launchMission(){
+  if(G.squads<1){showMsg("NO SQUADS AVAILABLE");return;}
+  closeMission();
+  G.squads--;
+  updateHUD();
+  initBattle(G.selectedTerritory);
+  showBattle();
+}
+
+function showStrat(){
+  document.getElementById('stratmap').style.display='block';
+  document.getElementById('battlemap').style.display='none';
+  document.getElementById('btn-strat').classList.add('active');
+  document.getElementById('btn-battle').classList.remove('active');
+  if(animFrame)cancelAnimationFrame(animFrame);
+  G.inBattle=false;
+  drawStratMap();
+  updateHUD();
+}
+
+function showBattle(){
+  if(!battleState){showMsg("SELECT TERRITORY AND DEPLOY FIRST");return;}
+  document.getElementById('stratmap').style.display='none';
+  document.getElementById('battlemap').style.display='block';
+  document.getElementById('btn-battle').style.display='inline-block';
+  document.getElementById('btn-strat').classList.remove('active');
+  document.getElementById('btn-battle').classList.add('active');
+  G.inBattle=true;
+  battleLoop();
+}
+
+// BATTLE ENGINE
+function initBattle(territory){
+  const W=bCanvas.width||700, H=bCanvas.height||380;
+  const enemyCount=territory?(territory.strength*3):9;
+  const mission=territory?territory.objective:'Eliminate All';
+  battleState={
+    territory,
+    player:{x:80,y:H/2,hp:100,maxHp:100,ammo:60,maxAmmo:60,angle:0,speed:2.2,shooting:false,lastShot:0,reloading:false,reloadTimer:0},
+    squad:[
+      {x:80,y:H/2-30,hp:80,maxHp:80,alive:true,angle:0,lastShot:0,target:null},
+      {x:80,y:H/2+30,hp:80,maxHp:80,alive:true,angle:0,lastShot:0,target:null}
+    ],
+    enemies:genEnemies(enemyCount,W,H),
+    bullets:[],
+    enemyBullets:[],
+    particles:[],
+    stratagems:[],
+    activeStratagems:[],
+    calldowns:{orbital:0,turret:0,shield:0},
+    shieldActive:false,shieldTimer:0,
+    turrets:[],
+    wave:1, totalWaves:Math.min(territory?territory.strength:3,5),
+    waveTimer:0, wavePause:false, waveComplete:false,
+    mission, missionComplete:false, missionFail:false,
+    kills:0, totalEnemies:enemyCount,
+    camera:{x:0,y:0},
+    worldW:W*2, worldH:H*1.5,
+    elapsed:0, dt:0, last:performance.now()
+  };
+  document.getElementById('wavefill').style.width='0%';
+}
+
+function genEnemies(count,W,H){
+  const enemies=[];
+  const wW=W*2, wH=H*1.5;
+  for(let i=0;i<count;i++){
+    const t=Math.random()<0.3?'heavy':Math.random()<0.5?'scout':'trooper';
+    enemies.push({
+      x:wW*0.45+Math.random()*wW*0.5, y:30+Math.random()*(wH-60),
+      hp:t==='heavy'?60:t==='trooper'?30:20,
+      maxHp:t==='heavy'?60:t==='trooper'?30:20,
+      type:t, alive:true, angle:0,
+      speed:t==='scout'?1.8:t==='heavy'?0.8:1.2,
+      lastShot:Math.random()*2000,
+      shootInterval:t==='heavy'?1200:t==='scout'?800:1000,
+      alertRange:t==='scout'?200:150,
+      id:i
+    });
+  }
+  return enemies;
+}
+
+function battleLoop(){
+  if(!G.inBattle||!battleState)return;
+  const now=performance.now();
+  battleState.dt=Math.min(now-battleState.last,50);
+  battleState.last=now;
+  battleState.elapsed+=battleState.dt;
+  updateBattle();
+  drawBattle();
+  animFrame=requestAnimationFrame(battleLoop);
+}
+
+function updateBattle(){
+  const bs=battleState;
+  const dt=bs.dt/16;
+  if(bs.missionComplete||bs.missionFail)return;
+  const p=bs.player;
+  const W=bCanvas.width, H=bCanvas.height;
+  const wW=bs.worldW, wH=bs.worldH;
+
+  // Player movement
+  let dx=0,dy=0;
+  if(keys['ArrowLeft']||keys['a']||keys['A'])dx-=p.speed;
+  if(keys['ArrowRight']||keys['d']||keys['D'])dx+=p.speed;
+  if(keys['ArrowUp']||keys['w']||keys['W'])dy-=p.speed;
+  if(keys['ArrowDown']||keys['s']||keys['S'])dy+=p.speed;
+  if(dx&&dy){dx*=0.707;dy*=0.707;}
+  p.x=Math.max(10,Math.min(wW-10,p.x+dx*dt));
+  p.y=Math.max(10,Math.min(wH-10,p.y+dy*dt));
+
+  // Reload
+  if(bs.player.reloading){
+    bs.player.reloadTimer-=bs.dt;
+    if(bs.player.reloadTimer<=0){bs.player.reloading=false;bs.player.ammo=bs.player.maxAmmo;}
+  }
+
+  // Camera
+  bs.camera.x=p.x-W/2;
+  bs.camera.y=p.y-H/2;
+  bs.camera.x=Math.max(0,Math.min(wW-W,bs.camera.x));
+  bs.camera.y=Math.max(0,Math.min(wH-H,bs.camera.y));
+
+  // Squad AI
+  bs.squad.forEach((m,mi)=>{
+    if(!m.alive)return;
+    let closestEnemy=null,closestDist=Infinity;
+    bs.enemies.forEach(e=>{if(e.alive){const d=Math.hypot(e.x-m.x,e.y-m.y);if(d<closestDist){closestDist=d;closestEnemy=e;}}});
+    if(closestEnemy&&closestDist<200){
+      m.angle=Math.atan2(closestEnemy.y-m.y,closestEnemy.x-m.x);
+      if(bs.elapsed-m.lastShot>700){
+        fireBullet(bs.bullets,m.x,m.y,m.angle,'squad',8);
+        m.lastShot=bs.elapsed;
+      }
+    }
+    const tx=p.x+(mi===0?-30:30)*(Math.random()<0.01?-1:1);
+    const ty=p.y+(mi===0?-25:25);
+    const ddx=tx-m.x, ddy=ty-m.y, ddist=Math.hypot(ddx,ddy);
+    if(ddist>40){m.x+=ddx/ddist*1.5*dt;m.y+=ddy/ddist*1.5*dt;}
+    m.x=Math.max(10,Math.min(wW-10,m.x));
+    m.y=Math.max(10,Math.min(wH-10,m.y));
+  });
+
+  // Enemy AI
+  bs.enemies.forEach(e=>{
+    if(!e.alive)return;
+    const dp=Math.hypot(p.x-e.x,p.y-e.y);
+    if(dp<e.alertRange){
+      e.angle=Math.atan2(p.y-e.y,p.x-e.x);
+      if(dp>60){e.x+=Math.cos(e.angle)*e.speed*dt;e.y+=Math.sin(e.angle)*e.speed*dt;}
+      if(bs.elapsed-e.lastShot>e.shootInterval&&dp<300){
+        const spread=(Math.random()-0.5)*0.3;
+        fireBullet(bs.enemyBullets,e.x,e.y,e.angle+spread,'enemy',e.type==='heavy'?14:9);
+        e.lastShot=bs.elapsed;
+      }
+    } else {
+      e.x+=Math.sin(bs.elapsed/1000+e.id)*0.3*dt;
+      e.y+=Math.cos(bs.elapsed/1000+e.id)*0.3*dt;
+    }
+    e.x=Math.max(0,Math.min(wW,e.x));e.y=Math.max(0,Math.min(wH,e.y));
+  });
+
+  // Update bullets
+  moveBullets(bs.bullets,wW,wH,dt);
+  moveBullets(bs.enemyBullets,wW,wH,dt);
+
+  // Bullet hit enemy
+  bs.bullets.forEach(b=>{
+    if(!b.alive)return;
+    bs.enemies.forEach(e=>{
+      if(!e.alive)return;
+      if(Math.hypot(b.x-e.x,b.y-e.y)<12){
+        b.alive=false; e.hp-=b.dmg;
+        spawnParticles(bs.particles,e.x,e.y,'#e84040',5);
+        if(e.hp<=0){e.alive=false;bs.kills++;spawnParticles(bs.particles,e.x,e.y,'#ff6040',12);}
+      }
+    });
+  });
+
+  // Enemy bullet hit player/squad
+  bs.enemyBullets.forEach(b=>{
+    if(!b.alive)return;
+    if(bs.shieldActive&&Math.hypot(b.x-p.x,b.y-p.y)<80){b.alive=false;return;}
+    if(Math.hypot(b.x-p.x,b.y-p.y)<14){b.alive=false;p.hp-=b.dmg;spawnParticles(bs.particles,p.x,p.y,'#40e0ff',4);if(p.hp<=0){p.hp=0;bs.missionFail=true;onMissionEnd(false);}}
+    bs.squad.forEach(m=>{
+      if(!m.alive||!b.alive)return;
+      if(Math.hypot(b.x-m.x,b.y-m.y)<12){b.alive=false;m.hp-=b.dmg*0.7;if(m.hp<=0){m.alive=false;spawnParticles(bs.particles,m.x,m.y,'#ffcc40',10);}}
+    });
+  });
+
+  // Turrets
+  bs.turrets.forEach(t=>{
+    if(!t.alive)return;
+    t.timer=(t.timer||0)+bs.dt;
+    if(t.timer>600){
+      let closest=null,cd=Infinity;
+      bs.enemies.forEach(e=>{if(e.alive){const d=Math.hypot(e.x-t.x,e.y-t.y);if(d<cd&&d<180){cd=d;closest=e;}}});
+      if(closest){const a=Math.atan2(closest.y-t.y,closest.x-t.x);fireBullet(bs.bullets,t.x,t.y,a,'turret',15);t.timer=0;}
+    }
+  });
+
+  // Shield
+  if(bs.shieldActive){bs.shieldTimer-=bs.dt;if(bs.shieldTimer<=0)bs.shieldActive=false;}
+
+  // Particles
+  bs.particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=bs.dt;p.vy+=0.05*dt;});
+  bs.particles=bs.particles.filter(p=>p.life>0);
+  bs.bullets=bs.bullets.filter(b=>b.alive);
+  bs.enemyBullets=bs.enemyBullets.filter(b=>b.alive);
+
+  // Check win
+  const aliveEnemies=bs.enemies.filter(e=>e.alive).length;
+  document.getElementById('wavefill').style.width=(bs.kills/bs.totalEnemies*100)+'%';
+  if(aliveEnemies===0&&!bs.missionComplete){bs.missionComplete=true;onMissionEnd(true);}
+
+  // Battle HUD overlay
+  updateBattleHUD();
+}
+
+function fireBullet(arr,x,y,angle,team,dmg){
+  const spd=team==='enemy'?3.5:5;
+  arr.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,alive:true,dmg,team});
+}
+
+function moveBullets(arr,wW,wH,dt){
+  arr.forEach(b=>{if(!b.alive)return;b.x+=b.vx*dt*2;b.y+=b.vy*dt*2;if(b.x<0||b.x>wW||b.y<0||b.y>wH)b.alive=false;});
+}
+
+function spawnParticles(arr,x,y,col,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, spd=1+Math.random()*3;
+    arr.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,col,life:400+Math.random()*400,maxLife:800});
+  }
+}
+
+function drawBattle(){
+  if(!bCtx||!battleState)return;
+  const bs=battleState;
+  const W=bCanvas.width, H=bCanvas.height;
+  const cx=bs.camera.x, cy=bs.camera.y;
+  bCtx.clearRect(0,0,W,H);
+  bCtx.fillStyle='#0a110c';
+  bCtx.fillRect(0,0,W,H);
+  drawBattleground(bCtx,W,H,cx,cy);
+
+  function wx(x){return x-cx;} function wy(y){return y-cy;}
+
+  // Turrets
+  bs.turrets.forEach(t=>{
+    if(!t.alive)return;
+    bCtx.fillStyle='#40a860';
+    bCtx.beginPath();bCtx.arc(wx(t.x),wy(t.y),8,0,Math.PI*2);bCtx.fill();
+    bCtx.fillStyle='#a0ffa0';bCtx.font='8px monospace';bCtx.textAlign='center';
+    bCtx.fillText('TRT',wx(t.x),wy(t.y)+3);
+  });
+
+  // Shield
+  if(bs.shieldActive){
+    const p=bs.player;
+    bCtx.beginPath();bCtx.arc(wx(p.x),wy(p.y),80,0,Math.PI*2);
+    bCtx.strokeStyle='rgba(80,200,255,0.4)';bCtx.lineWidth=3;bCtx.stroke();
+    bCtx.fillStyle='rgba(80,200,255,0.07)';bCtx.fill();
+    bCtx.lineWidth=1;
+  }
+
+  // Bullets
+  bs.bullets.forEach(b=>{bCtx.fillStyle='#ffe060';bCtx.beginPath();bCtx.arc(wx(b.x),wy(b.y),3,0,Math.PI*2);bCtx.fill();});
+  bs.enemyBullets.forEach(b=>{bCtx.fillStyle='#ff4040';bCtx.beginPath();bCtx.arc(wx(b.x),wy(b.y),3,0,Math.PI*2);bCtx.fill();});
+
+  // Particles
+  bs.particles.forEach(p=>{
+    const a=p.life/p.maxLife;
+    bCtx.globalAlpha=a;bCtx.fillStyle=p.col;
+    bCtx.beginPath();bCtx.arc(wx(p.x),wy(p.y),2,0,Math.PI*2);bCtx.fill();
+  });
+  bCtx.globalAlpha=1;
+
+  // Squad
+  bs.squad.forEach((m,i)=>{
+    if(!m.alive)return;
+    drawUnit(bCtx,wx(m.x),wy(m.y),m.angle,'#60c080',m.hp,m.maxHp,'S'+(i+1));
+  });
+
+  // Enemies
+  bs.enemies.forEach(e=>{
+    if(!e.alive)return;
+    const col=e.type==='heavy'?'#ff4040':e.type==='scout'?'#ff8040':'#e04040';
+    drawUnit(bCtx,wx(e.x),wy(e.y),e.angle,col,e.hp,e.maxHp,e.type==='heavy'?'H':'E');
+  });
+
+  // Player
+  const p=bs.player;
+  drawUnit(bCtx,wx(p.x),wy(p.y),p.angle,'#4ade80',p.hp,p.maxHp,'P',true);
+
+  // HUD overlay
+  drawBattleHUDCanvas(bCtx,W,H,bs);
+
+  // Mission result
+  if(bs.missionComplete){
+    drawResult(bCtx,W,H,'MISSION COMPLETE','#4ade80');
+  } else if(bs.missionFail){
+    drawResult(bCtx,W,H,'MISSION FAILED','#e84040');
+  }
+}
+
+function drawBattleground(ctx,W,H,cx,cy){
+  ctx.strokeStyle='#152018';ctx.lineWidth=0.5;
+  for(let x=(-cx%50);x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=(-cy%50);y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // Some terrain features
+  const terrainSeed=battleState?battleState.totalEnemies:5;
+  for(let i=0;i<20;i++){
+    const tx=(((i*137+terrainSeed*11)%battleState.worldW)-cx);
+    const ty=(((i*89+terrainSeed*7)%battleState.worldH)-cy);
+    if(tx>-20&&tx<W+20&&ty>-20&&ty<H+20){
+      ctx.fillStyle=i%3===0?'#1a2a1a':'#142014';
+      ctx.beginPath();
+      if(i%4===0){ctx.rect(tx-12,ty-8,24,16);}
+      else{ctx.arc(tx,ty,8+i%6,0,Math.PI*2);}
+      ctx.fill();
+    }
+  }
+}
+
+function drawUnit(ctx,x,y,angle,col,hp,maxHp,label,isPlayer){
+  const r=isPlayer?10:8;
+  if(isPlayer){ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.strokeStyle='rgba(74,222,128,0.2)';ctx.lineWidth=2;ctx.stroke();}
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=col+'33';ctx.fill();
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=isPlayer?2:1.5;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(angle)*(r+6),y+Math.sin(angle)*(r+6));
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=col;ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(label,x,y+3);
+  const bw=20,bh=3;
+  ctx.fillStyle='#1a2a1a';ctx.fillRect(x-bw/2,y-r-6,bw,bh);
+  ctx.fillStyle=hp/maxHp>0.5?'#4ade80':hp/maxHp>0.25?'#f0c040':'#e84040';
+  ctx.fillRect(x-bw/2,y-r-6,bw*(hp/maxHp),bh);
+  ctx.textAlign='left';
+}
+
+function drawBattleHUDCanvas(ctx,W,H,bs){
+  ctx.fillStyle='rgba(6,14,10,0.85)';ctx.fillRect(0,H-52,W,52);
+  ctx.strokeStyle='#2a5a3a';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H-52);ctx.lineTo(W,H-52);ctx.stroke();
+  ctx.fillStyle='#4ade80';ctx.font='10px monospace';
+  const p=bs.player;
+  ctx.fillText('HP: '+Math.max(0,Math.floor(p.hp))+'/'+p.maxHp,8,H-35);
+  ctx.fillText('AMMO: '+(p.reloading?'RELOADING...':p.ammo+'/'+p.maxAmmo),8,H-20);
+  ctx.fillText('KILLS: '+bs.kills+'/'+bs.totalEnemies,160,H-35);
+  ctx.fillText('WAVE: '+bs.wave+'/'+bs.totalWaves,160,H-20);
+  const liveSquad=bs.squad.filter(m=>m.alive).length;
+  ctx.fillText('SQUAD: '+liveSquad+'/'+bs.squad.length,280,H-35);
+  ctx.fillStyle='#8ba89a';
+  ctx.fillText('[1]ORBITAL'+(G.stratagems.orbital?'':' LOCKED'),380,H-35);
+  ctx.fillText('[2]TURRET'+(G.stratagems.turret?'':' LOCKED'),480,H-35);
+  ctx.fillText('[3]SHIELD'+(G.stratagems.shield?'':' LOCKED'),580,H-35);
+}
+
+function drawResult(ctx,W,H,text,col){
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=col;ctx.font='bold 28px monospace';ctx.textAlign='center';
+  ctx.fillText(text,W/2,H/2-20);
+  ctx.fillStyle='#8ba89a';ctx.font='12px monospace';
+  ctx.fillText('PRESS [B] TO RETURN TO STRATEGIC MAP',W/2,H/2+20);
+  ctx.textAlign='left';
+}
+
+function updateBattleHUD(){}
+
+function handleKey(e){
+  const bs=battleState;
+  if(e.key==='b'||e.key==='B'){
+    if(G.inBattle){showStrat();}
+    return;
+  }
+  if(!G.inBattle||!bs)return;
+  const p=bs.player;
+
+  // Player shoot (space)
+  if(e.key===' '||e.key==='f'||e.key==='F'){
+    if(p.ammo>0&&!p.reloading&&bs.elapsed-p.lastShot>200){
+      let closest=null,cd=Infinity;
+      bs.enemies.forEach(e=>{if(e.alive){const d=Math.hypot(e.x-p.x,e.y-p.y);if(d<cd){cd=d;closest=e;}}});
+      if(closest){p.angle=Math.atan2(closest.y-p.y,closest.x-p.x);}
+      fireBullet(bs.bullets,p.x,p.y,p.angle,'player',18);
+      p.ammo--;p.lastShot=bs.elapsed;
+      if(p.ammo===0){p.reloading=true;p.reloadTimer=2200;showMsg("RELOADING...");}
+    }
+    return;
+  }
+  // Reload
+  if(e.key==='r'||e.key==='R'){if(!p.reloading){p.reloading=true;p.reloadTimer=2200;showMsg("RELOADING...");} return;}
+  // Stratagems
+  if(e.key==='1'&&G.stratagems.orbital){callOrbitalStrike(bs);}
+  if(e.key==='2'&&G.stratagems.turret){callTurret(bs);}
+  if(e.key==='3'&&G.stratagems.shield){callShield(bs);}
+}
+
+bCanvas&&bCanvas.addEventListener('click',function(e){
+  if(!G.inBattle||!battleState||battleState.missionComplete||battleState.missionFail)return;
+  const rect=bCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const p=battleState.player;
+  const wx=mx+battleState.camera.x, wy=my+battleState.camera.y;
+  p.angle=Math.atan2(wy-p.y,wx-p.x);
+  if(p.ammo>0&&!p.reloading&&battleState.elapsed-p.lastShot>200){
+    fireBullet(battleState.bullets,p.x,p.y,p.angle,'player',18);
+    p.ammo--;p.lastShot=battleState.elapsed;
+    if(p.ammo===0){p.reloading=true;p.reloadTimer=2200;showMsg("RELOADING...");}
+  }
+});
+
+function callOrbitalStrike(bs){
+  if(!bs||bs.calldowns.orbital>bs.elapsed)return;
+  const p=bs.player;
+  let strongest=null,sd=Infinity;
+  bs.enemies.forEach(e=>{if(e.alive){const d=Math.hypot(e.x-p.x,e.y-p.y);if(d<200&&d<sd){sd=d;strongest=e;}}});
+  if(!strongest){showMsg("NO TARGET IN RANGE");return;}
+  showMsg("ORBITAL STRIKE INBOUND!");
+  spawnParticles(bs.particles,strongest.x,strongest.y,'#ff8040',30);
+  bs.enemies.forEach(e=>{if(!e.alive)return;if(Math.hypot(e.x-strongest.x,e.y-strongest.y)<60){e.hp-=80;if(e.hp<=0){e.alive=false;bs.kills++;}spawnParticles(bs.particles,e.x,e.y,'#ff4000',15);}});
+  bs.calldowns.orbital=bs.elapsed+15000;
+}
+
+function callTurret(bs){
+  if(!bs||bs.calldowns.turret>bs.elapsed)return;
+  const p=bs.player;
+  bs.turrets.push({x:p.x+30,y:p.y,alive:true,timer:0});
+  showMsg("AUTO TURRET DEPLOYED!");
+  bs.calldowns.turret=bs.elapsed+20000;
+  setTimeout(()=>{if(bs.turrets.length>0){bs.turrets[bs.turrets.length-1].alive=false;}},12000);
+}
+
+function callShield(bs){
+  if(!bs||bs.calldowns.shield>bs.elapsed)return;
+  bs.shieldActive=true;bs.shieldTimer=8000;
+  showMsg("SHIELD GENERATOR ACTIVE — 8 SECONDS");
+  bs.calldowns.shield=bs.elapsed+25000;
+}
+
+function onMissionEnd(success){
+  const t=G.selectedTerritory;
+  setTimeout(()=>{
+    if(success){
+      showMsg(success?"VICTORY! TERRITORY SECURED":("MISSION FAILED"));
+      if(t){t.team='friendly';t.garrison=G.squads>0?1:0;}
+      G.resources+=G.missionReward;
+      G.squads=Math.min(G.squads+1,G.maxSquads);
+    } else {
+      showMsg("SQUAD LOST — FALL BACK");
+    }
+    updateHUD();
+    document.getElementById('btn-battle').style.display='inline-block';
+  },1000);
+}
+
+function endTurn(){
+  G.turn++;
+  // Enemy expansion
+  if(Math.random()<0.4){
+    const friendlies=G.territories.filter(t=>t.team==='friendly');
+    const enemies=G.territories.filter(t=>t.team==='enemy');
+    if(enemies.length>0&&friendlies.length>0){
+      const target=friendlies[Math.floor(Math.random()*friendlies.length)];
+      const adj=target.connected.filter(i=>G.territories[i].team==='enemy');
+      if(adj.length>0&&Math.random()<0.25){
+        target.team='enemy';target.strength=2;
+        showMsg("ENEMY SEIZED "+target.name.toUpperCase()+"!");
+      }
+    }
+  }
+  // Resources per territory
+  G.resources+=G.territories.filter(t=>t.team==='friendly').length*50;
+  updateHUD();
+  drawStratMap();
+  showMsg("TURN "+G.turn+" — RESOURCES +"+G.territories.filter(t=>t.team==='friendly').length*50);
+}
+
+function recruitSquad(){
+  if(G.resources<150){showMsg("INSUFFICIENT RESOURCES (need 150)");return;}
+  if(G.squads>=G.maxSquads){showMsg("MAX SQUADS REACHED");return;}
+  G.resources-=150;G.squads++;updateHUD();showMsg("SQUAD RECRUITED");
+}
+
+function unlockStratagem(type){
+  const costs={orbital:200,turret:150,shield:180};
+  const names={orbital:'ORBITAL STRIKE',turret:'AUTO TURRET',shield:'SHIELD GENERATOR'};
+  if(G.stratagems[type]){showMsg(names[type]+" ALREADY UNLOCKED");return;}
+  if(G.resources<costs[type]){showMsg("INSUFFICIENT RESOURCES (need "+costs[type]+")");return;}
+  G.resources-=costs[type];G.stratagems[type]=true;
+  document.getElementById('strat-'+type.substring(0,3)).classList.add('active');
+  showMsg(names[type]+" UNLOCKED — USE [1/2/3] IN BATTLE");
+  updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('hud-res').textContent=G.resources;
+  const friendlyCount=G.territories.filter(t=>t.team==='friendly').length;
+  document.getElementById('hud-terr').textContent=friendlyCount+' / '+G.territories.length;
+  document.getElementById('hud-turn').textContent=G.turn;
+  document.getElementById('hud-squads').textContent=G.squads;
+  const threat=friendlyCount>8?'LOW':friendlyCount>4?'MEDIUM':'HIGH';
+  document.getElementById('hud-morale').textContent=G.squads>2?'HIGH':G.squads>0?'LOW':'CRITICAL';
+  document.getElementById('hud-threat').textContent=threat;
+  document.getElementById('hud-eterr').textContent=G.territories.filter(t=>t.team==='enemy').length;
+  if(document.getElementById('strat-orb'))document.getElementById('strat-orb').classList.toggle('active',G.stratagems.orbital);
+  if(document.getElementById('strat-tur'))document.getElementById('strat-tur').classList.toggle('active',G.stratagems.turret);
+  if(document.getElementById('strat-shld'))document.getElementById('strat-shld').classList.toggle('active',G.stratagems.shield);
+}
+
+function showMsg(txt){
+  const m=document.getElementById('msgbox');
+  m.textContent=txt;m.style.opacity='1';
+  if(msgTimer)clearTimeout(msgTimer);
+  msgTimer=setTimeout(()=>{m.style.opacity='0';},3000);
+}
+
+window.addEventListener('load',init);
+window.addEventListener('resize',()=>{resize();if(!G.inBattle)drawStratMap();});
+</script>
